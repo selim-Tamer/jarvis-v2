@@ -62,128 +62,102 @@ class WebChecks(unittest.TestCase):
         self.assertIn('GEMINI_API_KEY is missing',at.warning[0].value)
         self.assertTrue(at.chat_input[0].disabled)
 
-    def test_app_chat_and_clear_do_not_call_real_api(self):
+    def test_text_send_and_clear(self):
         client=Mock()
         client.chats.create.return_value.send_message.return_value.text='Offline reply'
-        with patch('cloud.web_core.genai.Client',return_value=client):
+        with patch('cloud.web_core.genai.Client',return_value=client), patch('cloud.ui.voice_composer') as composer:
+            composer.return_value=None
             at=AppTest.from_file(str(APP),default_timeout=10)
             at.secrets={'GEMINI_API_KEY':'offline-test-key'}
             at.run()
-            self.assertFalse(at.exception)
-            at.switch_page('views/settings.py').run()
-            self.assertFalse(at.exception)
-            self.assertTrue(any('Model:' in item.value for item in at.markdown))
-            self.assertEqual(len(at.chat_input),0)
-            at.switch_page('views/dashboard.py').run()
-            at.chat_input[0].set_value('Hello web app').run()
+            composer.return_value={'id':'text-one','kind':'text','text':'Hello'}
+            at.run()
             self.assertFalse(at.exception)
             self.assertEqual(at.session_state['messages'][-1]['text'],'Offline reply')
-            client.chats.create.return_value.send_message.assert_called_once_with('Hello web app')
+            self.assertFalse(composer.call_args.kwargs['autoplay'])
+            at.run()
+            client.chats.create.return_value.send_message.assert_called_once_with('Hello')
+            composer.return_value=None
             at.button(key='clear').click().run()
-            self.assertFalse(at.exception)
             self.assertEqual(at.session_state['messages'],[])
 
-    def test_full_pages_preserve_session_and_microphone_permission(self):
-        client=Mock()
-        with patch('cloud.web_core.genai.Client',return_value=client):
+    def test_full_pages_preserve_session(self):
+        with patch('cloud.web_core.genai.Client'), patch('cloud.ui.voice_composer',return_value=None):
             at=AppTest.from_file(str(APP),default_timeout=10)
             at.secrets={'GEMINI_API_KEY':'offline-test-key'}
             at.run()
+            self.assertFalse(any('sidebar-brand' in item.value for item in at.sidebar.markdown))
             at.toggle(key='mic_enabled').set_value(True).run()
-            for page, title in [('profile','Profile'),('messages','Messages'),('help','Help'),('settings','Settings')]:
+            for page,title in [('profile','Profile'),('messages','Messages'),('help','Help'),('settings','Settings')]:
                 at.switch_page('views/'+page+'.py').run()
                 self.assertFalse(at.exception)
                 self.assertEqual(at.title[0].value,title)
-                self.assertEqual(len(at.chat_input),0)
-                self.assertEqual(len(at.audio_input),0)
                 if page=='profile':
                     at.text_input(key='profile_name_input').set_value('Selim').run()
             at.switch_page('views/dashboard.py').run()
-            self.assertFalse(at.exception)
             self.assertTrue(at.toggle(key='mic_enabled').value)
             self.assertEqual(at.session_state['display_name'],'Selim')
-            self.assertTrue(any('Selim' in item.value for item in at.caption))
-            client.models.generate_content.assert_not_called()
 
-    def test_api_failure_is_visible_and_redacted(self):
+    def test_recording_send_speaks_reply_without_review_or_duplicate_request(self):
+        import base64
         client=Mock()
-        client.chats.create.return_value.send_message.side_effect=RuntimeError('offline-test-key rejected')
-        with patch('cloud.web_core.genai.Client',return_value=client):
+        client.models.generate_content.return_value.text='A recorded message'
+        client.chats.create.return_value.send_message.return_value.text='Spoken answer'
+        with patch('cloud.web_core.genai.Client',return_value=client), patch('cloud.ui.voice_composer') as composer:
+            composer.return_value=None
             at=AppTest.from_file(str(APP),default_timeout=10)
             at.secrets={'GEMINI_API_KEY':'offline-test-key'}
             at.run()
-            at.chat_input[0].set_value('Hello').run()
+            at.toggle(key='mic_enabled').set_value(True).run()
+            composer.return_value={'id':'voice-one','kind':'audio','audio':base64.b64encode(b'test-clip').decode(),'mime':'audio/webm;codecs=opus'}
+            at.run()
+            self.assertFalse(at.exception)
+            client.models.generate_content.assert_called_once()
+            client.chats.create.return_value.send_message.assert_called_once_with('A recorded message')
+            self.assertTrue(composer.call_args.kwargs['autoplay'])
+            self.assertEqual(composer.call_args.kwargs['reply'],'Spoken answer')
+            self.assertTrue(composer.call_args.kwargs['reply_id'])
+            self.assertTrue(any(item.label=='Voice reply transcript' for item in at.expander))
+            self.assertNotIn('send_audio',[button.key for button in at.button])
+            at.run()
+            client.models.generate_content.assert_called_once()
+            client.chats.create.return_value.send_message.assert_called_once()
+
+    def test_bad_or_disabled_audio_never_calls_gemini(self):
+        client=Mock()
+        with patch('cloud.web_core.genai.Client',return_value=client), patch('cloud.ui.voice_composer') as composer:
+            composer.return_value=None
+            at=AppTest.from_file(str(APP),default_timeout=10)
+            at.secrets={'GEMINI_API_KEY':'offline-test-key'}
+            at.run()
+            composer.return_value={'id':'disabled','kind':'audio','audio':'AAAA','mime':'audio/webm'}
+            at.run()
+            self.assertIn('Enable Microphone',at.error[0].value)
+            at.toggle(key='mic_enabled').set_value(True).run()
+            composer.return_value={'id':'invalid','kind':'audio','audio':'not-base64','mime':'audio/webm'}
+            at.run()
+            self.assertTrue(at.error)
+            client.models.generate_content.assert_not_called()
+
+    def test_api_failure_has_no_spoken_success(self):
+        client=Mock()
+        client.chats.create.return_value.send_message.side_effect=RuntimeError('offline-test-key rejected')
+        with patch('cloud.web_core.genai.Client',return_value=client), patch('cloud.ui.voice_composer') as composer:
+            composer.return_value=None
+            at=AppTest.from_file(str(APP),default_timeout=10)
+            at.secrets={'GEMINI_API_KEY':'offline-test-key'}
+            at.run()
+            composer.return_value={'id':'fail','kind':'text','text':'Hello'}
+            at.run()
             self.assertFalse(at.exception)
             self.assertIn('Gemini request failed',at.error[0].value)
             self.assertNotIn('offline-test-key',at.error[0].value)
-            at.run()
-            self.assertIn('Gemini request failed',at.error[0].value)
-
-    def test_speech_controls_do_not_execute_model_markup(self):
-        from cloud.streamlit_app import speech_controls
-        with patch('cloud.streamlit_app.st.iframe') as embed:
-            speech_controls('</script><script>alert("unsafe")</script>')
-            source=embed.call_args.args[0]
-            self.assertNotIn('</script><script>alert',source)
-            self.assertIn('\\u003c/script>',source)
-
-    def test_microphone_toggle_gates_recording_and_resets_old_clip(self):
-        client=Mock()
-        with patch('cloud.web_core.genai.Client',return_value=client):
-            at=AppTest.from_file(str(APP),default_timeout=10)
-            at.secrets={'GEMINI_API_KEY':'offline-test-key'}
-            at.run()
-            self.assertFalse(at.exception)
-            self.assertFalse(at.toggle(key='mic_enabled').value)
-            self.assertEqual(len(at.toggle),1)
-            self.assertTrue(at.audio_input[0].disabled)
-            self.assertNotIn('send_audio',[button.key for button in at.button])
-            initial=at.session_state['recording_epoch']
-            at.toggle(key='mic_enabled').set_value(True).run()
-            self.assertFalse(at.exception)
-            self.assertFalse(at.audio_input[0].disabled)
-            self.assertGreater(at.session_state['recording_epoch'],initial)
-            enabled_epoch=at.session_state['recording_epoch']
-            at.toggle(key='mic_enabled').set_value(False).run()
-            self.assertTrue(at.audio_input[0].disabled)
-            self.assertNotIn('send_audio',[button.key for button in at.button])
-            self.assertGreater(at.session_state['recording_epoch'],enabled_epoch)
-            client.models.generate_content.assert_not_called()
-
-    def test_sound_message_waits_for_review_then_sends_once(self):
-        import io
-        import wave
-        audio=io.BytesIO()
-        with wave.open(audio,'wb') as wav:
-            wav.setnchannels(1)
-            wav.setsampwidth(2)
-            wav.setframerate(16000)
-            wav.writeframes(b'\0\0'*1600)
-        clip=audio.getvalue()
-        client=Mock()
-        client.models.generate_content.return_value.text='A recorded sound message'
-        client.chats.create.return_value.send_message.return_value.text='Sound received'
-        with patch('cloud.web_core.genai.Client',return_value=client):
-            at=AppTest.from_file(str(APP),default_timeout=10)
-            at.secrets={'GEMINI_API_KEY':'offline-test-key'}
-            at.run()
-            at.toggle(key='mic_enabled').set_value(True).run()
-            at.audio_input[0].set_value(('message.wav',clip,'audio/wav')).run()
-            self.assertFalse(at.exception)
-            self.assertEqual(at.session_state['pending_audio'],clip)
-            client.models.generate_content.assert_not_called()
-            at.button(key='send_audio').click().run()
-            self.assertFalse(at.exception)
-            client.models.generate_content.assert_called_once()
-            client.chats.create.return_value.send_message.assert_called_once_with('A recorded sound message')
-            self.assertNotIn('pending_audio',at.session_state)
-            at.audio_input[0].set_value(('message.wav',clip,'audio/wav')).run()
-            at.toggle(key='mic_enabled').set_value(False).run()
-            self.assertNotIn('pending_audio',at.session_state)
+            self.assertEqual(composer.call_args.kwargs['reply'],'')
+            self.assertFalse(composer.call_args.kwargs['autoplay'])
 
     def test_busy_indicator_clears_after_failure(self):
-        from cloud.streamlit_app import loading
-        with patch('cloud.streamlit_app.st.empty') as placeholder:
+        from cloud.ui import loading
+        with patch('cloud.ui.st.empty') as placeholder:
             with self.assertRaises(RuntimeError):
                 with loading('Thinking <test>'):
                     raise RuntimeError('Simulated provider failure')

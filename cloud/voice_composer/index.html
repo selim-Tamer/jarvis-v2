@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Message bar styling adapts the user's Lakshay-art and sahilxkhadka Uiverse references. See ../THIRD_PARTY_NOTICES.md. -->
+<style>
+*{box-sizing:border-box}html{background:#0b1018;color-scheme:dark}body{margin:0;padding:5px;color:#e6edf5;background:#0b1018;font:14px system-ui,sans-serif}
+.bar{display:flex;align-items:center;gap:8px;padding:6px 8px;border:2px solid transparent;border-radius:17px;background:linear-gradient(#06090f,#06090f) padding-box,linear-gradient(125deg,#6e60b6,#274560 48%,#9572ad) border-box;box-shadow:-2px 0 10px #9d8cff33,2px 3px 10px #6ba8ff26}
+.bar:focus-within{box-shadow:-3px 0 12px #9d8cff66,3px 3px 12px #6ba8ff40}
+button{font:inherit;cursor:pointer;color:#e5e0ed;border:1px solid #3d3a4f;background:linear-gradient(180deg,#161329,#000,#1d1b4b);border-radius:12px}
+.icon{display:flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;padding:0}.icon svg{width:23px;height:23px;fill:currentColor}
+button:hover:enabled{border-color:#9d8cff;background:linear-gradient(#292144,#0b0914,#302b65)}button:disabled{opacity:.4;cursor:default}button:focus-visible,textarea:focus-visible{outline:2px solid #9d8cff;outline-offset:2px}
+#mic.recording{background:#694086;border-color:#c7a3fb;opacity:1;animation:pulse 1s ease-in-out infinite}
+textarea{min-width:0;flex:1;resize:none;border:0;outline:0;background:transparent;color:#f5f2fa;font:16px system-ui,sans-serif;line-height:24px;height:42px;max-height:98px;padding:9px 4px}textarea::placeholder{color:#b9b5c9}
+#status{display:block;min-height:22px;margin:8px 2px 0;color:#aab5ca;font-size:12px;line-height:18px}#status.error{color:#f1adc3}
+.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}.actions button{padding:7px 10px;font-size:12px}.actions[hidden]{display:none}#speech-status{color:#b9a8ff;font-size:12px}
+@keyframes pulse{50%{box-shadow:0 0 0 4px #9d8cff33}}@media(prefers-reduced-motion:reduce){#mic.recording{animation:none}}
+</style></head><body>
+<div class="bar" role="group" aria-label="Message bar">
+<button class="icon" id="mic" type="button" aria-label="Record a voice message" title="Record; three seconds of silence finishes your message">
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm-7-3h2a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.93V21h-2v-3.07A7 7 0 0 1 5 11Z"/></svg></button>
+<textarea id="text" aria-label="Message Jarvis" placeholder="Ask Jarvis…" maxlength="12000" rows="1"></textarea>
+<button class="icon" id="send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-8 8 1.4 1.4L11 6.8V21h2V6.8l5.6 5.4L20 11Z"/></svg></button>
+</div>
+<span id="status" role="status" aria-live="polite">Type a message, or enable Microphone to record.</span>
+<div class="actions" id="draft-actions" hidden><button id="discard" type="button">Discard recording</button></div>
+<div class="actions" id="speech-actions" hidden><button id="replay" type="button">Replay reply</button><button id="stop" type="button">Stop speaking</button><span id="speech-status" role="status" aria-live="polite"></span></div>
+<script src="speech.js"></script><script src="silence.js"></script><script src="composer.js"></script>
+</body></html>

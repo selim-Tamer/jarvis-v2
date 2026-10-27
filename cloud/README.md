@@ -51,8 +51,8 @@ That version uses http://127.0.0.1:8000 and retains Windows functionality. The w
 
 1. Open the page. With no key, expect setup instructions rather than a traceback. With a key, expect the chat box and voice-recording section.
 2. Type `What time is it in my configured timezone?`. Expect a time reply, or a visible API error if the key/model is rejected.
-3. Turn the single **Microphone** switch on (green), then press the round microphone button beside the text field to record a sound message. Allow browser microphone access when prompted. Press the same button again to stop. Review the clip, then choose **Send recording** or **Discard recording**. Recording uploads the clip to this app; only **Send recording** sends it to Gemini for transcription. Turning the switch off (red) disables recording and discards the previous clip; typing still works. Expect your transcript and a reply after sending. HTTPS on Cloud or localhost is needed for browser microphone access.
-4. Click **Read latest reply**, then **Stop speaking**. Playback uses your browser's speech engine; if unsupported or blocked, the text remains readable.
+3. Turn **Microphone** on, tap the mic beside the text field once, and speak. Allow browser microphone access when prompted. Three seconds of silence after speech ends the recording and releases the microphone. Press the existing **Send** arrow to submit the clip directly; there is no separate review or confirmation screen. Send also finishes an active recording and sends it immediately. Silence alone does not send anything. Discard recording removes a finished clip. Turning Microphone off discards any clip. No speech for ten seconds cancels the recording; recordings also stop at two minutes. Ambient noise can affect the energy-based silence detector.
+4. After a sound message, expect Jarvis to speak automatically. **Replay reply** and **Stop speaking** appear in the message bar. Its existing iframe retains the recording/Send interaction for browser speech permission. If the browser blocks playback or has no speech engine, a visible status explains it; use Replay reply or the collapsed **Voice reply transcript**. Typed messages show their text normally and can also be read with Replay reply. Microphone access requires HTTPS or localhost.
 5. Ask `Draft an email to me@example.com with subject Test and body Hello`. Expect a downloadable draft labelled **nothing has been sent**. There is no send action or SMTP connection in this app.
 6. Click **Clear conversation**. Expect an empty chat and no previous drafts. Each browser session has its own chat and drafts. They are not persisted across a new session, server restart, or cloud sleep/restart.
 
@@ -66,8 +66,16 @@ The tests exercise both pure web logic and Streamlit's headless `AppTest` interf
 
 ## Selected UI designs
 
-The black workspace, metallic microphone switch, cyan rings with a muted gold accent, liquid-metal loader, violet/cyan message bar, and dark glass sidebar adapt the user's Uiverse selections. Credits and license text are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Record and Send share the same colour and size. There is only one microphone on/off switch; the mic beside the text field starts/stops a sound message for review and sending.
+The black workspace, metallic microphone switch, purple and blue rings, liquid-metal loader, violet/cyan message bar, and dark glass sidebar adapt the user's Uiverse selections. Credits and license text are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Record and Send share the same colour and size. The single microphone switch enables recording; the mic in the text bar starts a clip, three seconds of silence stops it, and Send submits it directly. The sidebar has no logo. The central rings use violet, lavender, and blue to match the rest of the site.
 
 The logo and animation share one hero panel, with the animation above the logo. The original logo is stored unchanged in `cloud/assets/jarvis-logo.png`. The loader crops the actual logo artwork to show its lettering, with three animated dots centred beneath it. The loader appears only during a real pending request. Reduced-motion preferences disable animation.
 
 The black/purple glass sidebar stays open. Dashboard, Profile, Messages, Help, and Settings are separate URL-routed pages; switching pages preserves the conversation and microphone permission. On small screens it remains visible as an icon rail. Profile stores a display name for the current session. Messages shows the conversation and offers JSON export. Clear conversation resets chat and microphone.
+
+Browser-recorder and speech lifecycle tests (no real microphone or Gemini calls):
+
+```powershell
+node --test cloud\test_voice_composer.cjs
+```
+
+The component uses built-in browser MediaRecorder, Web Audio, and speech synthesis APIs, with no additional Python or JavaScript packages. Audio remains in the browser until Send. Each submission is acknowledged by an ID before API work so reruns cannot send it twice. Browser speech uses a per-reply ID so reruns do not repeat an answer.

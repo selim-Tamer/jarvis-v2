@@ -91,7 +91,7 @@ header[data-testid="stHeader"] { background: #000d; }
 .jarvis-satellites span:nth-child(1){background:#31d9e7;}
 .jarvis-satellites span:nth-child(2){background:#9d8cff;animation-name:jarvis-liquid-flow-y;animation-delay:-1s;}
 .jarvis-satellites span:nth-child(3){background:#62c5da;animation-delay:-2s;animation-direction:reverse;}
-.jarvis-satellites span:nth-child(4){background:#d8d16e;animation-delay:-3s;}
+.jarvis-satellites span:nth-child(4){background:#8b91ff;animation-delay:-3s;}
 .jarvis-loader-text {font-size:12px;font-weight:700;letter-spacing:1px;color:#171b25;z-index:2;opacity:0;animation:jarvis-liquid-text 4s ease-in-out infinite;}
 @keyframes jarvis-liquid-pulse {50%{transform:scale(1.15);}}
 @keyframes jarvis-liquid-rotate {to{transform:rotate(360deg);}}
@@ -290,3 +290,6 @@ button[aria-label="Collapse sidebar"],button[aria-label="Expand sidebar"],
 .st-key-composer_recorder [data-testid="stAudioInput"] div:has(> button[data-testid="stAudioInputActionButton"]) {padding:0;}
 .st-key-composer [data-testid="stChatInput"] > div,
 .st-key-composer [data-testid="stChatInput"] div:has(> textarea) {background:transparent;border:0;}
+
+/* Custom recorder owns its aligned input row; no native waveform gutter. */
+iframe[title="cloud.ui.jarvis_voice_composer"] {color-scheme:dark;}
