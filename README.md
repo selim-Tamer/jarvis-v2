@@ -1,8 +1,21 @@
 # Jarvis v2.0: React interface, local Python assistant
 
+## Optional Streamlit web app
+
+For the Streamlit deployment screen use **main file path `cloud/streamlit_app.py`**, branch `main`, repository `selim-Tamer/jarvis-v2`. Add `GEMINI_API_KEY` in Streamlit **Advanced settings → Secrets**. The web app has separate cloud-compatible dependencies and supports chat, browser-recorded voice, search, time, and email drafts. Email sending and Windows controls remain in the desktop version.
+
+To run the Streamlit website locally:
+
+```powershell
+.\venv\Scripts\python.exe -m pip install --only-binary=:all: -r .\cloud\requirements.txt
+.\venv\Scripts\python.exe -m streamlit run .\cloud\streamlit_app.py --server.address 127.0.0.1
+```
+
+Open `http://localhost:8501`. See [cloud/README.md](cloud/README.md) for exact deployment, settings, and test steps.
+
 ## Install from GitHub on Windows
 
-This repository contains a **Windows desktop assistant**. GitHub stores the code; the assistant runs on your laptop. It is not a Streamlit Cloud application.
+The main application is a **Windows desktop assistant** with a Vite/React interface. GitHub stores its code; it runs on your laptop. The independent Streamlit web app is in `cloud/`.
 
 Install Python 3.14, Node.js 24, and Git, then open PowerShell in the folder where you want to keep the project:
 

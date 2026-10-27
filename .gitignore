@@ -4,6 +4,7 @@ node_modules/
 .env.*
 !.env.example
 .streamlit/secrets.toml
+**/.streamlit/secrets.toml
 *.pem
 *.key
 .edge-profile/
