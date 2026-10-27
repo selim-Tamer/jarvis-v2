@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+google-genai==2.33.0
+python-dotenv
+faster-whisper==1.2.1
+sounddevice==0.5.6
+numpy
+pyttsx3==2.99
+pystray
+Pillow
+# Test client (also used by google-genai):
+httpx
