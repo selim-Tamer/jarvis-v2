@@ -70,9 +70,11 @@ class WebChecks(unittest.TestCase):
             at.secrets={'GEMINI_API_KEY':'offline-test-key'}
             at.run()
             self.assertFalse(at.exception)
-            at.radio(key='navigation').set_value('Settings').run()
+            at.switch_page('views/settings.py').run()
             self.assertFalse(at.exception)
             self.assertTrue(any('Model:' in item.value for item in at.markdown))
+            self.assertEqual(len(at.chat_input),0)
+            at.switch_page('views/dashboard.py').run()
             at.chat_input[0].set_value('Hello web app').run()
             self.assertFalse(at.exception)
             self.assertEqual(at.session_state['messages'][-1]['text'],'Offline reply')
@@ -80,6 +82,28 @@ class WebChecks(unittest.TestCase):
             at.button(key='clear').click().run()
             self.assertFalse(at.exception)
             self.assertEqual(at.session_state['messages'],[])
+
+    def test_full_pages_preserve_session_and_microphone_permission(self):
+        client=Mock()
+        with patch('cloud.web_core.genai.Client',return_value=client):
+            at=AppTest.from_file(str(APP),default_timeout=10)
+            at.secrets={'GEMINI_API_KEY':'offline-test-key'}
+            at.run()
+            at.toggle(key='mic_enabled').set_value(True).run()
+            for page, title in [('profile','Profile'),('messages','Messages'),('help','Help'),('settings','Settings')]:
+                at.switch_page('views/'+page+'.py').run()
+                self.assertFalse(at.exception)
+                self.assertEqual(at.title[0].value,title)
+                self.assertEqual(len(at.chat_input),0)
+                self.assertEqual(len(at.audio_input),0)
+                if page=='profile':
+                    at.text_input(key='profile_name_input').set_value('Selim').run()
+            at.switch_page('views/dashboard.py').run()
+            self.assertFalse(at.exception)
+            self.assertTrue(at.toggle(key='mic_enabled').value)
+            self.assertEqual(at.session_state['display_name'],'Selim')
+            self.assertTrue(any('Selim' in item.value for item in at.caption))
+            client.models.generate_content.assert_not_called()
 
     def test_api_failure_is_visible_and_redacted(self):
         client=Mock()
@@ -166,6 +190,10 @@ class WebChecks(unittest.TestCase):
             placeholder.return_value.empty.assert_called_once()
             markup=placeholder.return_value.markdown.call_args.args[0]
             self.assertIn('Thinking &lt;test&gt;',markup)
+            self.assertIn('jarvis-loading-wordmark',markup)
+            self.assertIn('jarvis-loading-dots',markup)
+            self.assertEqual(markup.count('<i></i>'),3)
+            self.assertIn('data:image/png;base64,',markup)
 
 
 if __name__=='__main__':

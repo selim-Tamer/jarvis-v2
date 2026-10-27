@@ -54,12 +54,19 @@ def reset_recording():
     st.session_state.pop("audio_error", None)
 
 
+def wordmark_markup():
+    image = Path(__file__).with_name("assets") / "jarvis-logo.png"
+    encoded = base64.b64encode(image.read_bytes()).decode("ascii")
+    return ('<span class="jarvis-loading-wordmark"><img alt="J.A.R.V.I.S." '
+            'src="data:image/png;base64,' + encoded + '"></span>')
+
+
 def loader_markup(message):
     # Liquid-metal loader adapted from Uiverse.io by chase2k25.
     return ('<div class="jarvis-loading" role="status" aria-live="polite">'
             '<div class="jarvis-liquid-loader" aria-hidden="true"><div class="jarvis-liquid-wrapper">'
             '<div class="jarvis-satellites"><span></span><span></span><span></span><span></span></div>'
-            '<div class="jarvis-main-orb"></div></div><span class="jarvis-loader-text">JARVIS</span>'
+            '<div class="jarvis-main-orb"></div></div><div class="jarvis-loading-centre">' + wordmark_markup() + '<span class="jarvis-loading-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>'
             '</div><p>' + escape(message) + '</p></div>')
 
 
@@ -114,65 +121,95 @@ def logo_markup():
             '<img alt="J.A.R.V.I.S. logo" src="data:image/png;base64,' + encoded + '"></div></div>')
 
 
-def sidebar_navigation(settings):
+def current_settings():
+    return Settings(api_key=read_setting("GEMINI_API_KEY"),
+                    model=read_setting("JARVIS_MODEL", "gemini-3.5-flash"),
+                    timezone=read_setting("JARVIS_TIMEZONE", "Africa/Cairo"))
+
+
+def initialize_session():
+    st.session_state.setdefault("messages", [])
+    st.session_state.setdefault("recording_epoch", 0)
+    # Keep the permission setting across page changes, without keeping a recorder running.
+    st.session_state.mic_enabled = st.session_state.get("mic_enabled", False)
+
+
+def clear_conversation():
+    previous = st.session_state.pop("agent", None)
+    if previous:
+        previous.close()
+    st.session_state.messages = []
+    reset_recording()
+    st.session_state.mic_enabled = False
+
+
+def sidebar_navigation(pages, current_page):
     with st.sidebar:
-        st.header("Jarvis")
-        rail, panel = st.columns([1, 2.5], gap="small")
-        with rail:
-            with st.container(key="nav_rail"):
-                section = st.radio("Navigation", ["Dashboard", "Profile", "Messages", "Help", "Settings"],
-                                   key="navigation", label_visibility="collapsed")
-        with panel:
-            with st.container(key="nav_panel"):
-                st.subheader(section)
-                if section == "Dashboard":
-                    st.write(f"{len(st.session_state.messages)} conversation messages")
-                    st.write("Microphone enabled" if st.session_state.get("mic_enabled", False) else "Microphone off")
-                    st.caption("Use the main panel to type or record a message.")
-                elif section == "Profile":
-                    st.write("Your browser session")
-                    st.caption("Conversation and drafts belong to this session. This web app does not create a profile or store your chat in an account.")
-                elif section == "Messages":
-                    st.write(f"{len(st.session_state.messages)} messages")
-                    st.download_button("Export conversation", json.dumps(st.session_state.messages, indent=2),
-                                       file_name="jarvis-conversation.json", mime="application/json", key="export_chat")
-                elif section == "Help":
-                    st.write("Type and press Enter to chat. Enable the microphone before recording.")
-                    st.caption("Email is draft-only here. Windows app launching, the tray, and confirmed email sending remain in the desktop version.")
-                else:
-                    st.write("Model: " + settings.model)
-                    st.write("Timezone: " + settings.timezone)
-                    st.caption("Change these in Streamlit Secrets, or .env when running locally. Your API key is never displayed.")
-        if st.button("Clear conversation", key="clear"):
-            previous = st.session_state.pop("agent", None)
-            if previous:
-                previous.close()
-            st.session_state.messages = []
-            reset_recording()
-            st.session_state.mic_enabled = False
-            st.rerun()
+        st.markdown('<div class="sidebar-brand">' + logo_markup() + '</div>', unsafe_allow_html=True)
+        with st.container(key="nav_rail"):
+            for page, title, icon in pages:
+                with st.container(key="nav_active" if page is current_page else "nav_" + title.lower()):
+                    st.page_link(page, label=title, icon=icon, width="stretch")
+        st.button("Clear conversation", key="clear", on_click=clear_conversation)
+        st.caption("Your private browser session")
+
+
+def render_messages_page():
+    st.title("Messages")
+    st.caption("Your conversation in this browser session.")
+    if not st.session_state.messages:
+        st.info("No messages yet. Open Dashboard to start a conversation.")
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            if message.get("error"):
+                st.error(message["text"])
+            else:
+                st.markdown(message["text"])
+    st.download_button("Export conversation", json.dumps(st.session_state.messages, indent=2),
+                       file_name="jarvis-conversation.json", mime="application/json", key="export_chat")
+
+
+def render_profile_page():
+    st.title("Profile")
+    st.caption("Personalise this browser session.")
+    def save_name():
+        st.session_state.display_name = st.session_state.profile_name_input.strip()
+    st.text_input("Display name", value=st.session_state.get("display_name", ""),
+                  key="profile_name_input", max_chars=40, on_change=save_name)
+    st.info("Your name, conversation, and drafts belong to this browser session. They are not saved in an account.")
+
+
+def render_settings_page():
+    settings = current_settings()
+    st.title("Settings")
+    st.write("Model: " + settings.model)
+    st.write("Timezone: " + settings.timezone)
+    st.write("API key configured" if settings.api_key else "API key missing")
+    st.info("Change these values in Streamlit Secrets, or the project's .env file when running locally. Your API key is never displayed.")
+    st.caption("Audio is recorded only after you enable Microphone and press the Record button. Sending a recording transcribes it with Gemini.")
+
+
+def render_help_page():
+    st.title("Help")
+    st.markdown("""**Text messages:** type your request and press Enter or Send.
+
+**Sound messages:** enable the Microphone switch, press the mic in the text bar to record,
+then press it again to stop. Review your clip, then choose Send recording or Discard.
+
+**Speech output:** use Read latest reply and Stop speaking below Jarvis's answer.
+
+**Email:** this web app prepares drafts only. Sending with spoken confirmation remains in the Windows assistant.
+
+Use the permanent sidebar to change pages. Your conversation stays available in Messages.""")
 
 
 def render_workspace():
-    st.markdown('''<div class="jarvis-window-bar" aria-hidden="true">
-        <div class="jarvis-window-dots"><span></span><span></span><span></span></div>
-        <div class="jarvis-window-chevrons"><span>‹</span><span>›</span></div>
-        <div class="jarvis-window-address">Jarvis assistant</div>
-        </div>''', unsafe_allow_html=True)
-    st.markdown(logo_markup(), unsafe_allow_html=True)
-    st.markdown(ai_core_markup(), unsafe_allow_html=True)
-    st.title("JARVIS · Web")
-    st.caption("Chat, record a voice message, search the web, or draft an email.")
-    settings = Settings(api_key=read_setting("GEMINI_API_KEY"),
-                        model=read_setting("JARVIS_MODEL", "gemini-3.5-flash"),
-                        timezone=read_setting("JARVIS_TIMEZONE", "Africa/Cairo"))
+    settings = current_settings()
     fingerprint = hashlib.sha256((settings.api_key + settings.model + settings.timezone).encode()).hexdigest()
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "recording_epoch" not in st.session_state:
-        st.session_state.recording_epoch = 0
-
-    sidebar_navigation(settings)
+    st.markdown('<div class="jarvis-hero">' + ai_core_markup() + logo_markup() + '</div>', unsafe_allow_html=True)
+    st.title("JARVIS Â· Web")
+    name = st.session_state.get("display_name", "")
+    st.caption((f"Welcome, {name}. " if name else "") + "Chat, record a voice message, search the web, or draft an email.")
 
     if not settings.api_key:
         st.warning("GEMINI_API_KEY is missing. In Streamlit Cloud open Advanced settings → Secrets, add your key, then save. For localhost, put it in the project's .env file.")
@@ -278,11 +315,25 @@ def render_workspace():
 
 
 def main():
-    st.set_page_config(page_title="Jarvis Web", page_icon="🔵", layout="centered")
+    st.set_page_config(page_title="Jarvis Web", page_icon="🔵", layout="centered", initial_sidebar_state="expanded")
     css = Path(__file__).with_name("ui_styles.css").read_text(encoding="utf-8")
     st.markdown("<style>" + css + "</style>", unsafe_allow_html=True)
+    initialize_session()
+    views = Path(__file__).with_name("views")
+    definitions = [
+        ("dashboard", "Dashboard", ":material/dashboard:"),
+        ("profile", "Profile", ":material/person:"),
+        ("messages", "Messages", ":material/chat:"),
+        ("help", "Help", ":material/help:"),
+        ("settings", "Settings", ":material/settings:"),
+    ]
+    pages = [(st.Page(views / f"{slug}.py", title=title, icon=icon,
+                      url_path=slug, default=slug == "dashboard"), title, icon)
+             for slug, title, icon in definitions]
+    navigation = st.navigation([page for page, _, _ in pages], position="hidden")
+    sidebar_navigation(pages, navigation)
     with st.container(key="workspace"):
-        render_workspace()
+        navigation.run()
 
 
 if __name__ == "__main__":
